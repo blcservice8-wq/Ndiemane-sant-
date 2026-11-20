@@ -10,7 +10,8 @@ Plateforme de gestion du Poste de Santé de Ndiemane (district de Joal-Fadiouth,
 | Schéma de base de données (`prisma/schema.prisma`) | ✅ valide (60 modèles), 🔶 jamais appliqué sur une vraie base |
 | Script de chargement des rôles (`prisma/seed.ts`) | 🔶 écrit, jamais exécuté |
 | Scripts de sauvegarde / restauration (`infra/scripts`) | 🔶 syntaxe vérifiée seulement |
-| API (NestJS) et interface (Next.js) | ❌ **pas encore développées** (Phase 15) |
+| API de connexion (Fastify, `apps/api`) | ✅ 31 tests + essai HTTP réel · 🔶 jamais branchée à PostgreSQL |
+| Autres routes API (patients, pharmacie…) et interface Next.js | ❌ **pas encore développées** (Phase 15, suite) |
 
 ⚠️ **Ne saisissez aucune donnée de patient réelle.** Voir `docs/CHECKLIST_MISE_EN_PRODUCTION_ET_CDP.md`.
 
@@ -58,7 +59,20 @@ docs/       guides administrateur, utilisateur, déploiement, sauvegarde, checkl
             apercu-tableau-de-bord.html (maquette, données de démonstration)
 ```
 
-## Prochaine étape : Phase 15 — intégration
+## Lancer l'API de connexion (Phase 15)
+
+```bash
+npm install
+echo "SESSION_SECRET=\"$(openssl rand -base64 48)\"" >> .env     # une seule fois
+npm run admin:creer     # crée le site + le premier administrateur (le mot de passe n'est pas affiché)
+npm run api             # démarre l'API sur le port 4000
+```
+Puis, dans Codespaces : onglet **Ports** → ligne 4000 → icône « Ouvrir dans le navigateur », et ajoutez `/connexion` à l'adresse.
+La page permet de se connecter, voir ses rôles et droits, et se déconnecter (fonctionne sur téléphone).
+
+Limites connues : la session est un jeton signé de 8 h (la déconnexion efface le cookie mais ne peut pas révoquer le jeton avant son expiration ; en revanche un compte suspendu ou un rôle retiré prend effet **immédiatement**). Le journal d'audit en base n'est pas encore chaîné (voir `packages/securite`).
+
+## Prochaine étape : Phase 15 (suite)
 
 API (authentification, droits, un module à la fois) branchée sur Prisma, puis l'interface Next.js.
 Chaque module métier de `packages/` s'y branche déjà par des interfaces (`Depot…`) à implémenter avec Prisma.

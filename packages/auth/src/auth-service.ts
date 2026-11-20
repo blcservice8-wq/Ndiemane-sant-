@@ -1,8 +1,8 @@
-import { verifier } from "./password.js";
+import { hacher, verifier } from "./password.js";
 import { verifierCode } from "./totp.js";
 import { emettre } from "./session.js";
 
-export type CompteAuth = { id: string; email: string; motDePasseHash: string; statut: "ACTIF"|"SUSPENDU"|"DESACTIVE";
+export type CompteAuth = { id: string; email: string; nomComplet?: string; motDePasseHash: string; statut: "ACTIF"|"SUSPENDU"|"DESACTIVE";
   tentativesEchec: number; verrouJusqua: Date | null; mfaSecret: string | null; roles: string[] };
 export interface DepotAuth {
   parEmail(email: string): Promise<CompteAuth | null>;
@@ -11,6 +11,9 @@ export interface DepotAuth {
 }
 export interface Audit { log(e: { action: string; utilisateurId?: string; details?: unknown }): Promise<void> }
 export const MAX_ECHECS = 5, VERROU_MIN = 15;
+// Empreinte factice : un identifiant inconnu ou inactif coûte le même temps de calcul qu'un vrai compte (pas d'énumération par chronométrage).
+let faux: Promise<string> | null = null;
+const hashFactice = () => (faux ??= hacher("Facti$e-Mot2Passe-Inutilisable"));
 export type Resultat =
   | { ok: true; jeton: string }
   | { ok: false; raison: "IDENTIFIANTS" | "VERROUILLE" | "MFA_REQUIS" | "MFA_INVALIDE" | "COMPTE_INACTIF" };
@@ -18,8 +21,8 @@ export type Resultat =
 export async function connecter(d: DepotAuth, a: Audit, secret: string,
   email: string, motDePasse: string, codeMfa?: string, maintenant = new Date()): Promise<Resultat> {
   const c = await d.parEmail(email.trim().toLowerCase());
-  if (!c) { await a.log({ action: "LOGIN_ECHEC_INCONNU" }); return { ok: false, raison: "IDENTIFIANTS" }; }
-  if (c.statut !== "ACTIF") { await a.log({ action: "LOGIN_COMPTE_INACTIF", utilisateurId: c.id }); return { ok: false, raison: "COMPTE_INACTIF" }; }
+  if (!c) { await verifier(motDePasse, await hashFactice()); await a.log({ action: "LOGIN_ECHEC_INCONNU" }); return { ok: false, raison: "IDENTIFIANTS" }; }
+  if (c.statut !== "ACTIF") { await verifier(motDePasse, c.motDePasseHash); await a.log({ action: "LOGIN_COMPTE_INACTIF", utilisateurId: c.id }); return { ok: false, raison: "COMPTE_INACTIF" }; }
   if (c.verrouJusqua && c.verrouJusqua > maintenant) { await a.log({ action: "LOGIN_VERROUILLE", utilisateurId: c.id }); return { ok: false, raison: "VERROUILLE" }; }
 
   const echec = async (raison: "IDENTIFIANTS" | "MFA_INVALIDE"): Promise<Resultat> => {

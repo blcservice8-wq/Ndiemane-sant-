@@ -3,8 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "description": "Plateforme de gestion du Poste de Santé de Ndiemane",
-  "workspaces": ["packages/*"],
-  "engines": { "node": ">=20" },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "tests": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
@@ -12,9 +17,21 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev --name init",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "api": "npm run dev -w @ndiemane/api",
+    "admin:creer": "npm run admin:creer -w @ndiemane/api"
   },
-  "prisma": { "seed": "tsx prisma/seed.ts" },
-  "dependencies": { "@prisma/client": "^6.0.0" },
-  "devDependencies": { "prisma": "^6.0.0", "tsx": "^4.19.0", "typescript": "^5.6.0", "vitest": "^2.1.0", "@types/node": "^22.0.0" }
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.0.0"
+  }
 }
