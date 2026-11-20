@@ -1,0 +1,903 @@
+// NDIEMANE SANTE DIGITAL - Schema Prisma (Phase 2)
+// Conventions : id UUID (genere cote client), siteId (multi-postes), version (sync),
+// deletedAt (suppression logique). Aucune suppression physique des donnees medicales/financieres.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- ENUMS ----------
+enum Sexe {
+  M
+  F
+}
+enum StatutUtilisateur {
+  ACTIF
+  SUSPENDU
+  DESACTIVE
+}
+enum TypeConsultation {
+  CURATIVE
+  CPN
+  CPON
+  PF
+  ENFANT
+  VACCINATION
+  NUTRITION
+  CHRONIQUE
+}
+enum TypeMouvement {
+  ENTREE
+  SORTIE_DELIVRANCE
+  SORTIE_PERTE
+  AJUSTEMENT_INVENTAIRE
+  TRANSFERT
+}
+enum StatutDemandeLabo {
+  DEMANDEE
+  PRELEVEE
+  RESULTAT_SAISI
+  VALIDEE
+  ANNULEE
+}
+enum EtatEquipement {
+  FONCTIONNEL
+  EN_PANNE
+  EN_MAINTENANCE
+  HORS_SERVICE
+}
+enum EtatBatiment {
+  BON
+  MOYEN
+  DEGRADE
+  CRITIQUE
+}
+enum StatutCommande {
+  BROUILLON
+  VALIDEE
+  ENVOYEE
+  PARTIELLE
+  LIVREE
+  ANNULEE
+}
+enum StatutDepense {
+  DEMANDEE
+  ENGAGEE
+  VALIDEE
+  PAYEE
+  REJETEE
+}
+enum TypeRecette {
+  ACTES
+  SOINS
+  PHARMACIE
+  LABO
+  SUBVENTION
+  DON
+  CONTRIBUTION
+  AUTRE
+}
+enum TypeConge {
+  ANNUEL
+  MALADIE
+  MATERNITE
+  AUTRE
+}
+enum StatutSync {
+  EN_ATTENTE
+  ENVOYEE
+  APPLIQUEE
+  CONFLIT
+  ECHEC
+}
+enum SeveriteAlerte {
+  INFO
+  ATTENTION
+  CRITIQUE
+}
+enum TypeAlerte {
+  STOCK_FAIBLE
+  RUPTURE
+  PEREMPTION
+  PANNE
+  MAINTENANCE
+  CONGE
+  DOCUMENT_EXPIRANT
+  RENDEZ_VOUS
+  ECHEANCE
+  RAPPORT_RETARD
+}
+
+// ---------- SITE ----------
+model Site {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  nom       String
+  district  String?
+  region    String?
+  parametres Json    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  utilisateurs Utilisateur[]
+  patients     Patient[]
+}
+
+// ---------- ACCES ----------
+model Utilisateur {
+  id          String   @id @default(uuid())
+  siteId      String
+  email       String   @unique
+  nomComplet  String
+  motDePasseHash String
+  mfaSecret   String?
+  statut      StatutUtilisateur @default(ACTIF)
+  tentativesEchec Int  @default(0)
+  verrouJusqua DateTime?
+  derniereConnexion DateTime?
+  personnelId String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  version     Int      @default(1)
+  deletedAt   DateTime?
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  roles       UtilisateurRole[]
+  audits      JournalAudit[]
+  personnel   Personnel? @relation(fields: [personnelId], references: [id], onDelete: SetNull)
+  @@index([siteId])
+}
+
+model Role {
+  id          String @id @default(uuid())
+  code        String @unique
+  libelle     String
+  systeme     Boolean @default(false)
+  utilisateurs UtilisateurRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id      String @id @default(uuid())
+  module  String
+  action  String // LIRE, CREER, MODIFIER, VALIDER, ARCHIVER, EXPORTER
+  roles   RolePermission[]
+  @@unique([module, action])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@id([roleId, permissionId])
+}
+
+model UtilisateurRole {
+  utilisateurId String
+  roleId        String
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  role          Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  @@id([utilisateurId, roleId])
+}
+
+// ---------- PATIENTS ----------
+model Patient {
+  id          String   @id @default(uuid())
+  siteId      String
+  numeroDossier String
+  nom         String
+  prenom      String
+  sexe        Sexe
+  dateNaissance DateTime?
+  telephone   String?
+  localite    String?
+  adresse     String?
+  personneContact String?
+  empreinteDoublon String? // hash normalise nom+prenom+naissance+localite
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  version     Int      @default(1)
+  deletedAt   DateTime?
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  antecedents Antecedent[]
+  allergies   Allergie[]
+  consultations Consultation[]
+  rendezVous  RendezVous[]
+  vaccinations Vaccination[]
+  demandesLabo DemandeAnalyse[]
+  suivis      SuiviProgramme[]
+  @@unique([siteId, numeroDossier])
+  @@index([siteId, nom, prenom])
+  @@index([empreinteDoublon])
+}
+
+model Antecedent {
+  id        String @id @default(uuid())
+  patientId String
+  type      String // MEDICAL, CHIRURGICAL, FAMILIAL, OBSTETRICAL
+  description String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int @default(1)
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  @@index([patientId])
+}
+
+model Allergie {
+  id        String @id @default(uuid())
+  patientId String
+  substance String
+  reaction  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int @default(1)
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  @@index([patientId])
+}
+
+// ---------- SOINS ----------
+model Consultation {
+  id          String @id @default(uuid())
+  siteId      String
+  patientId   String
+  praticienId String
+  type        TypeConsultation @default(CURATIVE)
+  date        DateTime @default(now())
+  motif       String
+  poids       Decimal? @db.Decimal(5,2)
+  taille      Decimal? @db.Decimal(5,1)
+  temperature Decimal? @db.Decimal(4,1)
+  tensionSys  Int?
+  tensionDia  Int?
+  pouls       Int?
+  observations String?
+  soins       String?
+  orientation String?
+  montantFcfa Int @default(0)
+  donneesSpecifiques Json? // champs CPN/CPoN/PF/nutrition
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  version     Int @default(1)
+  deletedAt   DateTime?
+  patient     Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  praticien   Personnel @relation(fields: [praticienId], references: [id], onDelete: Restrict)
+  diagnostics Diagnostic[]
+  prescriptions Prescription[]
+  references  Reference[]
+  demandes    DemandeAnalyse[]
+  recettes    Recette[]
+  @@index([siteId, date])
+  @@index([patientId, date])
+}
+
+model Diagnostic {
+  id    String @id @default(uuid())
+  consultationId String
+  codeCim10 String?
+  libelle String
+  principal Boolean @default(false)
+  consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Restrict)
+  @@index([consultationId])
+  @@index([codeCim10])
+}
+
+model Prescription {
+  id String @id @default(uuid())
+  consultationId String
+  createdAt DateTime @default(now())
+  consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Restrict)
+  lignes LignePrescription[]
+  @@index([consultationId])
+}
+
+model LignePrescription {
+  id String @id @default(uuid())
+  prescriptionId String
+  produitId String
+  posologie String
+  quantite Int
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  produit Produit @relation(fields: [produitId], references: [id], onDelete: Restrict)
+  delivrances Delivrance[]
+  @@index([prescriptionId])
+}
+
+model Reference {
+  id String @id @default(uuid())
+  consultationId String
+  structureDestination String
+  motif String
+  date DateTime @default(now())
+  contreReference String?
+  consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Restrict)
+  @@index([consultationId])
+}
+
+model RendezVous {
+  id String @id @default(uuid())
+  patientId String
+  date DateTime
+  motif String?
+  honore Boolean @default(false)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  @@index([date])
+}
+
+model Vaccination {
+  id String @id @default(uuid())
+  patientId String
+  vaccin String
+  dose Int @default(1)
+  date DateTime
+  lot String?
+  prochaineDate DateTime?
+  agentId String?
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  @@index([patientId])
+  @@index([date])
+}
+
+// ---------- PROGRAMMES ----------
+model Programme {
+  id String @id @default(uuid())
+  code String @unique
+  libelle String
+  acces_restreint Boolean @default(false) // ex: VIH
+  indicateurs Indicateur[]
+  suivis SuiviProgramme[]
+}
+
+model SuiviProgramme {
+  id String @id @default(uuid())
+  patientId String
+  programmeId String
+  dateDebut DateTime
+  dateFin DateTime?
+  donnees Json?
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  @@index([programmeId])
+}
+
+model Indicateur {
+  id String @id @default(uuid())
+  programmeId String?
+  code String @unique
+  libelle String
+  formule Json // definition configurable
+  unite String?
+  programme Programme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  objectifs Objectif[]
+}
+
+model Objectif {
+  id String @id @default(uuid())
+  indicateurId String
+  periode String // ex 2026-T1
+  cible Decimal @db.Decimal(14,2)
+  indicateur Indicateur @relation(fields: [indicateurId], references: [id], onDelete: Cascade)
+  realisations Realisation[]
+  @@unique([indicateurId, periode])
+}
+
+model Realisation {
+  id String @id @default(uuid())
+  objectifId String
+  valeur Decimal @db.Decimal(14,2)
+  dateMesure DateTime @default(now())
+  objectif Objectif @relation(fields: [objectifId], references: [id], onDelete: Cascade)
+  @@index([objectifId])
+}
+
+// ---------- PERSONNEL ----------
+model Personnel {
+  id String @id @default(uuid())
+  siteId String
+  matricule String?
+  nom String
+  prenom String
+  fonction String
+  qualification String?
+  telephone String?
+  dateEmbauche DateTime?
+  actif Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version Int @default(1)
+  deletedAt DateTime?
+  utilisateur Utilisateur?
+  contrats Contrat[]
+  presences Presence[]
+  conges Conge[]
+  gardes Garde[]
+  formations Formation[]
+  consultations Consultation[]
+  resultats ResultatAnalyse[]
+  @@unique([siteId, matricule])
+}
+
+model Contrat {
+  id String @id @default(uuid())
+  personnelId String
+  type String
+  debut DateTime
+  fin DateTime?
+  personnel Personnel @relation(fields: [personnelId], references: [id], onDelete: Restrict)
+  @@index([fin])
+}
+
+model Presence {
+  id String @id @default(uuid())
+  personnelId String
+  date DateTime @db.Date
+  present Boolean
+  motifAbsence String?
+  personnel Personnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  @@unique([personnelId, date])
+}
+
+model Conge {
+  id String @id @default(uuid())
+  personnelId String
+  type TypeConge
+  debut DateTime
+  fin DateTime
+  approuve Boolean @default(false)
+  personnel Personnel @relation(fields: [personnelId], references: [id], onDelete: Restrict)
+  @@index([debut, fin])
+}
+
+model Garde {
+  id String @id @default(uuid())
+  personnelId String
+  debut DateTime
+  fin DateTime
+  personnel Personnel @relation(fields: [personnelId], references: [id], onDelete: Restrict)
+  @@index([debut])
+}
+
+model Formation {
+  id String @id @default(uuid())
+  personnelId String
+  intitule String
+  organisme String?
+  date DateTime
+  evaluation String?
+  personnel Personnel @relation(fields: [personnelId], references: [id], onDelete: Restrict)
+}
+
+// ---------- PHARMACIE ----------
+model Produit {
+  id String @id @default(uuid())
+  siteId String
+  code String
+  designation String
+  dci String?
+  forme String?
+  categorie String // MEDICAMENT, CONSOMMABLE
+  unite String
+  prixVenteFcfa Int @default(0)
+  seuilAlerte Int @default(0)
+  actif Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version Int @default(1)
+  deletedAt DateTime?
+  lots Lot[]
+  lignesPrescription LignePrescription[]
+  lignesCommande LigneCommande[]
+  @@unique([siteId, code])
+}
+
+model Lot {
+  id String @id @default(uuid())
+  produitId String
+  numero String
+  peremption DateTime?
+  quantiteInitiale Int
+  fournisseurId String?
+  createdAt DateTime @default(now())
+  produit Produit @relation(fields: [produitId], references: [id], onDelete: Restrict)
+  fournisseur Fournisseur? @relation(fields: [fournisseurId], references: [id], onDelete: SetNull)
+  mouvements MouvementStock[]
+  @@unique([produitId, numero])
+  @@index([peremption])
+}
+
+// Le stock est DERIVE de la somme des mouvements (sync sans conflit)
+model MouvementStock {
+  id String @id @default(uuid())
+  lotId String
+  type TypeMouvement
+  quantite Int // signe : + entree, - sortie
+  motif String?
+  utilisateurId String
+  date DateTime @default(now())
+  delivranceId String? @unique
+  livraisonId String?
+  lot Lot @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  @@index([lotId, date])
+}
+
+model Delivrance {
+  id String @id @default(uuid())
+  lignePrescriptionId String?
+  patientId String?
+  quantite Int
+  prixFcfa Int @default(0)
+  delivreurId String
+  date DateTime @default(now())
+  lignePrescription LignePrescription? @relation(fields: [lignePrescriptionId], references: [id], onDelete: Restrict)
+  @@index([date])
+}
+
+model Inventaire {
+  id String @id @default(uuid())
+  date DateTime @default(now())
+  responsableId String
+  lignes Json // ecarts par lot
+  valide Boolean @default(false)
+}
+
+// ---------- LABORATOIRE ----------
+model Examen {
+  id String @id @default(uuid())
+  code String @unique
+  libelle String
+  tarifFcfa Int @default(0)
+  valeursReference String?
+  actif Boolean @default(true)
+  demandes DemandeAnalyse[]
+}
+
+model DemandeAnalyse {
+  id String @id @default(uuid())
+  patientId String
+  consultationId String?
+  examenId String
+  statut StatutDemandeLabo @default(DEMANDEE)
+  dateDemande DateTime @default(now())
+  datePrelevement DateTime?
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  examen Examen @relation(fields: [examenId], references: [id], onDelete: Restrict)
+  resultat ResultatAnalyse?
+  @@index([statut])
+}
+
+model ResultatAnalyse {
+  id String @id @default(uuid())
+  demandeId String @unique
+  valeur String
+  interpretation String?
+  technicienId String
+  valideParId String?
+  dateValidation DateTime?
+  demande DemandeAnalyse @relation(fields: [demandeId], references: [id], onDelete: Restrict)
+  technicien Personnel @relation(fields: [technicienId], references: [id], onDelete: Restrict)
+}
+
+// ---------- PATRIMOINE ----------
+model Batiment {
+  id String @id @default(uuid())
+  siteId String
+  nom String
+  etat EtatBatiment @default(BON)
+  description String?
+  salles Salle[]
+  travaux Travaux[]
+}
+
+model Salle {
+  id String @id @default(uuid())
+  batimentId String
+  nom String
+  usage String?
+  batiment Batiment @relation(fields: [batimentId], references: [id], onDelete: Restrict)
+  equipements Equipement[]
+}
+
+model Travaux {
+  id String @id @default(uuid())
+  batimentId String
+  description String
+  budgetFcfa Int @default(0)
+  statut String @default("PLANIFIE")
+  dateDebut DateTime?
+  dateFin DateTime?
+  batiment Batiment @relation(fields: [batimentId], references: [id], onDelete: Restrict)
+}
+
+model Equipement {
+  id String @id @default(uuid())
+  siteId String
+  codeQr String
+  designation String
+  marque String?
+  modele String?
+  numeroSerie String?
+  dateAcquisition DateTime?
+  valeurFcfa Int?
+  sourceFinancement String?
+  fournisseurId String?
+  salleId String?
+  responsableId String?
+  etat EtatEquipement @default(FONCTIONNEL)
+  garantieFin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version Int @default(1)
+  deletedAt DateTime?
+  salle Salle? @relation(fields: [salleId], references: [id], onDelete: SetNull)
+  fournisseur Fournisseur? @relation(fields: [fournisseurId], references: [id], onDelete: SetNull)
+  maintenances Maintenance[]
+  @@unique([siteId, codeQr])
+}
+
+model Maintenance {
+  id String @id @default(uuid())
+  equipementId String
+  type String // PREVENTIVE, CORRECTIVE
+  date DateTime
+  prochaineDate DateTime?
+  coutFcfa Int @default(0)
+  description String?
+  equipement Equipement @relation(fields: [equipementId], references: [id], onDelete: Restrict)
+  @@index([prochaineDate])
+}
+
+// ---------- TIERS ----------
+model Fournisseur {
+  id String @id @default(uuid())
+  siteId String
+  nom String
+  contact String?
+  telephone String?
+  evaluation Int?
+  commandes Commande[]
+  lots Lot[]
+  equipements Equipement[]
+  factures Facture[]
+}
+
+model Commande {
+  id String @id @default(uuid())
+  fournisseurId String
+  numero String @unique
+  statut StatutCommande @default(BROUILLON)
+  date DateTime @default(now())
+  validePar String?
+  fournisseur Fournisseur @relation(fields: [fournisseurId], references: [id], onDelete: Restrict)
+  lignes LigneCommande[]
+  livraisons Livraison[]
+}
+
+model LigneCommande {
+  id String @id @default(uuid())
+  commandeId String
+  produitId String
+  quantite Int
+  prixUnitaireFcfa Int
+  commande Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  produit Produit @relation(fields: [produitId], references: [id], onDelete: Restrict)
+}
+
+model Livraison {
+  id String @id @default(uuid())
+  commandeId String
+  date DateTime @default(now())
+  conforme Boolean @default(true)
+  remarque String?
+  commande Commande @relation(fields: [commandeId], references: [id], onDelete: Restrict)
+}
+
+model Facture {
+  id String @id @default(uuid())
+  fournisseurId String
+  numero String
+  montantFcfa Int
+  echeance DateTime?
+  payee Boolean @default(false)
+  fournisseur Fournisseur @relation(fields: [fournisseurId], references: [id], onDelete: Restrict)
+  @@unique([fournisseurId, numero])
+}
+
+model Partenaire {
+  id String @id @default(uuid())
+  siteId String
+  nom String
+  type String // ONG, COLLECTIVITE, FONDATION, ENTREPRISE, INSTITUTION
+  contact String?
+  conventions Convention[]
+}
+
+model Convention {
+  id String @id @default(uuid())
+  partenaireId String
+  objet String
+  debut DateTime
+  fin DateTime?
+  montantFcfa Int?
+  partenaire Partenaire @relation(fields: [partenaireId], references: [id], onDelete: Restrict)
+  @@index([fin])
+}
+
+model Association {
+  id String @id @default(uuid())
+  siteId String
+  nom String
+  type String // CDS, BAJENU_GOX, RELAIS, FEMMES, JEUNES, VILLAGEOISE
+  localite String?
+  membres Membre[]
+  activites ActiviteCommunautaire[]
+}
+
+model Membre {
+  id String @id @default(uuid())
+  associationId String
+  nom String
+  fonction String?
+  telephone String?
+  association Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+}
+
+model ActiviteCommunautaire {
+  id String @id @default(uuid())
+  associationId String
+  type String // REUNION, SENSIBILISATION, MOBILISATION
+  date DateTime
+  compteRendu String?
+  participants Int?
+  association Association @relation(fields: [associationId], references: [id], onDelete: Restrict)
+  @@index([date])
+}
+
+// ---------- FINANCES ----------
+model Budget {
+  id String @id @default(uuid())
+  siteId String
+  annee Int
+  libelle String
+  montantFcfa Int
+  engagements Engagement[]
+  @@unique([siteId, annee, libelle])
+}
+
+model Engagement {
+  id String @id @default(uuid())
+  budgetId String
+  montantFcfa Int
+  objet String
+  budget Budget @relation(fields: [budgetId], references: [id], onDelete: Restrict)
+  depenses Depense[]
+}
+
+model Depense {
+  id String @id @default(uuid())
+  siteId String
+  engagementId String?
+  libelle String
+  montantFcfa Int
+  statut StatutDepense @default(DEMANDEE)
+  demandeurId String
+  validateurId String?
+  dateValidation DateTime?
+  justificatifId String?
+  datePaiement DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version Int @default(1)
+  engagement Engagement? @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  justificatif Document? @relation(fields: [justificatifId], references: [id], onDelete: SetNull)
+  @@index([siteId, statut])
+}
+
+model Recette {
+  id String @id @default(uuid())
+  siteId String
+  type TypeRecette
+  montantFcfa Int
+  consultationId String?
+  date DateTime @default(now())
+  caissierId String
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  @@index([siteId, date])
+}
+
+model JournalCaisse {
+  id String @id @default(uuid())
+  siteId String
+  date DateTime @default(now())
+  libelle String
+  entreeFcfa Int @default(0)
+  sortieFcfa Int @default(0)
+  soldeFcfa Int
+  refType String?
+  refId String?
+  @@index([siteId, date])
+}
+
+// ---------- DOCUMENTS / ALERTES / SYSTEME ----------
+model Document {
+  id String @id @default(uuid())
+  siteId String
+  categorie String
+  titre String
+  cheminStockage String
+  empreinteSha256 String
+  expiration DateTime?
+  confidentialite String @default("INTERNE")
+  createdAt DateTime @default(now())
+  depenses Depense[]
+  @@index([expiration])
+}
+
+model Alerte {
+  id String @id @default(uuid())
+  siteId String
+  type TypeAlerte
+  severite SeveriteAlerte @default(ATTENTION)
+  message String
+  refType String?
+  refId String?
+  luePar String?
+  resolue Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@index([siteId, resolue])
+}
+
+model JournalAudit {
+  id String @id @default(uuid())
+  siteId String
+  utilisateurId String?
+  action String
+  entite String
+  entiteId String?
+  avant Json?
+  apres Json?
+  ip String?
+  date DateTime @default(now())
+  utilisateur Utilisateur? @relation(fields: [utilisateurId], references: [id], onDelete: SetNull)
+  @@index([entite, entiteId])
+  @@index([date])
+}
+
+// Outbox : operations locales a envoyer au cloud (et inversement)
+model OperationSync {
+  id String @id @default(uuid())
+  siteId String
+  entite String
+  entiteId String
+  operation OperationSync_Type @default(UPDATE)
+  charge Json
+  versionBase Int
+  cleIdempotence String @unique
+  statut StatutSync @default(EN_ATTENTE)
+  tentatives Int @default(0)
+  erreur String?
+  createdAt DateTime @default(now())
+  traiteeLe DateTime?
+  conflit ConflitSync?
+  @@index([statut, createdAt])
+}
+
+enum OperationSync_Type {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+model ConflitSync {
+  id String @id @default(uuid())
+  operationId String @unique
+  valeurLocale Json
+  valeurCentrale Json
+  resolution String?
+  resoluPar String?
+  resoluLe DateTime?
+  operation OperationSync @relation(fields: [operationId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NDIEMANE SANTÉ DIGITAL - Aperçu tableau de bord</title>
+<style>
+:root{--v:#1B8A4B;--b:#14467A;--bg:#F4F8F6;--c:#fff;--t:#1d2b26;--m:#5b6b64;--r:#C0392B;--o:#D68910}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--t)}
+.demo{background:#FFF3CD;color:#7a5a00;padding:8px 12px;font-size:13px;text-align:center;font-weight:600}
+header{background:linear-gradient(90deg,var(--b),var(--v));color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;border-radius:8px;background:#fff;display:grid;place-items:center}
+.logo svg{width:22px;height:22px}
+h1{font-size:16px;margin:0;line-height:1.2}header small{opacity:.85;font-size:12px}
+main{padding:14px;max-width:1100px;margin:auto}
+h2{font-size:14px;color:var(--b);margin:18px 0 8px;text-transform:uppercase;letter-spacing:.04em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{background:var(--c);border-radius:10px;padding:12px;box-shadow:0 1px 3px #0001;border-left:4px solid var(--v)}
+.card.b{border-color:var(--b)}.card.r{border-color:var(--r)}.card.o{border-color:var(--o)}
+.card .n{font-size:24px;font-weight:700}.card .l{font-size:12px;color:var(--m)}
+.box{background:var(--c);border-radius:10px;padding:12px;box-shadow:0 1px 3px #0001}
+.bar{height:10px;background:#e3ece7;border-radius:6px;overflow:hidden;margin:4px 0 10px}.bar i{display:block;height:100%;background:var(--v)}
+.row{display:flex;justify-content:space-between;font-size:13px}
+.al{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid #eef2f0;font-size:13px}.al:last-child{border:0}
+.tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;color:#fff;height:fit-content}
+.CRITIQUE{background:var(--r)}.ATTENTION{background:var(--o)}.INFO{background:var(--b)}
+.vide{color:var(--m);font-size:13px}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1815;--c:#17231f;--t:#e6efe9;--m:#9fb2a9}.bar{background:#2a3a33}.al{border-color:#26352f}}
+</style></head><body>
+<div class="demo">APERÇU AVEC DONNÉES DE DÉMONSTRATION - aucune valeur réelle. En production, chaque chiffre vient de la base.</div>
+<header><div class="logo"><svg viewBox="0 0 24 24"><path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7z" fill="#1B8A4B"/></svg></div>
+<div><h1>NDIEMANE SANTÉ DIGITAL</h1><small>Poste de Santé de Ndiemane - <span id="d"></span></small></div></header>
+<main>
+<h2>Activités sanitaires</h2><div class="grid" id="san"></div>
+<h2>Ressources</h2><div class="grid" id="res"></div>
+<h2>Finances (FCFA)</h2><div class="grid" id="fin"></div>
+<h2>Objectifs et réalisations</h2><div class="box" id="obj"></div>
+<h2>Alertes</h2><div class="box" id="al"></div>
+</main>
+<script>
+// DONNÉES DE DÉMONSTRATION (remplacées par l'API en production)
+const D={san:[["Patients enregistrés",120,""],["Consultations aujourd'hui",9,""],["Consultations ce mois",142,""],["Consultations cette année",1380,""],["Vaccinations",37,""],["Analyses labo",21,""]],
+res:[["Effectif actif",6,""],["Produits en rupture",2,"r"],["Stocks faibles",4,"o"],["Équipements fonctionnels",9,"b"],["Équipements en panne",2,"r"],["Bâtiments à réhabiliter",1,"o"]],
+fin:[["Recettes du mois",500000,"b"],["Dépenses du mois",320000,"o"],["Solde",180000,""],["Dépenses à valider",2,"o"]],
+obj:[["Couverture vaccinale",80,60],["CPN4 (démo)",50,41],["Consultations enfants",100,112]],
+al:[["CRITIQUE","Équipement en panne (démo)"],["ATTENTION","Facture fournisseur à échéance (démo)"],["INFO","Lot proche de la péremption (démo)"]]};
+const f=n=>n.toLocaleString("fr-FR");
+const cards=(id,a)=>document.getElementById(id).innerHTML=a.map(([l,n,c])=>`<div class="card ${c}"><div class="n">${f(n)}</div><div class="l">${l}</div></div>`).join("");
+cards("san",D.san);cards("res",D.res);cards("fin",D.fin);
+document.getElementById("obj").innerHTML=D.obj.map(([l,c,r])=>{const t=Math.round(r/c*1000)/10;return `<div class="row"><b>${l}</b><span>${f(r)} / ${f(c)} (${t} %)</span></div><div class="bar"><i style="width:${Math.min(t,100)}%"></i></div>`}).join("");
+document.getElementById("al").innerHTML=D.al.map(([s,m])=>`<div class="al"><span class="tag ${s}">${s}</span><span>${m}</span></div>`).join("");
+document.getElementById("d").textContent=new Date().toLocaleDateString("fr-FR");
+</script></body></html>

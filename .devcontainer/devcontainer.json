@@ -1,0 +1,9 @@
+{
+  "name": "NDIEMANE SANTÉ DIGITAL",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "postCreateCommand": "cp -n .env.example .env && npm install && npx prisma generate",
+  "forwardPorts": [5432],
+  "customizations": { "vscode": { "extensions": ["Prisma.prisma", "vitest.explorer"] } }
+}

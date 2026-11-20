@@ -1,0 +1,17 @@
+# Environnement de développement : Node 22 + PostgreSQL 16 (STATUT : non testé ici, pas de Docker dans mon environnement)
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm
+    volumes: ["../..:/workspaces:cached"]
+    command: sleep infinity
+    network_mode: service:db
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    volumes: [pgdata:/var/lib/postgresql/data]
+    environment:
+      POSTGRES_USER: ndiemane
+      POSTGRES_PASSWORD: ndiemane
+      POSTGRES_DB: ndiemane
+volumes:
+  pgdata:

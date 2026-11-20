@@ -1,0 +1,15 @@
+# HTTPS automatique (certificat Let's Encrypt) pour le serveur cloud. Sur le réseau local, utiliser un certificat interne.
+{$DOMAINE:sante.example.sn} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Cache-Control no-store
+		-Server
+	}
+	handle /api/* { reverse_proxy api:4000 }
+	handle { reverse_proxy web:3000 }
+}

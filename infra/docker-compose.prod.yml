@@ -1,0 +1,34 @@
+# NDIEMANE SANTÉ DIGITAL - production (serveur local ET cloud : même fichier, variables différentes)
+# STATUT : NON TESTÉ (pas de Docker dans l'environnement de développement). Les services api/web n'existent pas encore.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ndiemane
+      POSTGRES_USER: ndiemane
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [interne]            # aucun port publié : accessible seulement par l'API
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U ndiemane"], interval: 10s, retries: 5 }
+  api:
+    build: ../apps/api              # à créer
+    restart: unless-stopped
+    env_file: .env
+    depends_on: { db: { condition: service_healthy } }
+    networks: [interne, externe]
+  web:
+    build: ../apps/web              # à créer
+    restart: unless-stopped
+    env_file: .env
+    networks: [externe]
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data"]
+    networks: [externe]
+networks: { interne: { internal: true }, externe: {} }
+volumes: { pgdata: {}, caddy_data: {} }
+secrets: { db_password: { file: ./secrets/db_password.txt } }
